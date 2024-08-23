@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 *.gem
 *.rbc
 /.config
@@ -54,3 +55,17 @@ build-iPhoneSimulator/
 
 # Used by RuboCop. Remote config files pulled in from inherit_from directive.
 # .rubocop-https?--*
+||||||| (empty tree)
+=======
+/.bundle/
+/.yardoc
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
+
+# rspec failure tracking
+.rspec_status
+>>>>>>> 50e475b (Imports code from app)
