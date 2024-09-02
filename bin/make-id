@@ -1,0 +1,11 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: make-id
+# Description: Prints a unique id. Useful for batch scripting?
+require 'rubygems'
+require 'make_id'
+# In development mode, do: bundle exec bin/make-id
+
+# For now, print a snowflake id.
+p MakeId.snowflake_id
