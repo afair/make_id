@@ -7,5 +7,37 @@ require 'rubygems'
 require 'make_id'
 # In development mode, do: bundle exec bin/make-id
 
-# For now, print a snowflake id.
-p MakeId.snowflake_id
+# For now, print set of Id's
+
+# UUID: Print random UUID, UUID converted to base 10, UUID converted to base 32, UUID converted to base 62
+id = MakeId.uuid
+int = MakeId.uuid_to_base(id)
+puts "UUID:   \t#{id}\t#{int}\t#{MakeId.int_to_base(int,32)}\t#{MakeId.int_to_base(int,62)}"
+
+# DateTimeUUId: Print DateTime UUID, DateTime UUID converted to base 10, DateTime UUID converted to base 32, DateTime UUID converted to base 62
+id = MakeId.datetime_uuid
+int = MakeId.uuid_to_base(id)
+puts "DateTimeUUId:\t#{id}\t#{int}\t#{MakeId.int_to_base(int,32)}\t#{MakeId.int_to_base(int,62)}"
+
+# EpochUUID: Print DateTime UUID, DateTime UUID converted to base 10, DateTime UUID converted to base 32, DateTime UUID converted to base 62
+id = MakeId.epoch_uuid
+int = MakeId.uuid_to_base(id)
+puts "EpochUUID:\t#{id}\t#{int}\t#{MakeId.int_to_base(int,32)}\t#{MakeId.int_to_base(int,62)}"
+
+# RandomId: Print random Id, Random Id converted to base 10, Random Id converted to base 32, Random Id converted to base 62
+id = MakeId.random_id
+puts "RandomId:\t#{id}\t#{MakeId.int_to_base(id,32)}\t#{MakeId.int_to_base(id,62)}"
+
+# SnowflakeId: Print Snowflake Id, Snowflake Id converted to base 10, Snowflake Id converted to base 32, Snowflake Id converted to base 62
+id = MakeId.snowflake_id
+puts "SnowflakeId:\t#{id}\t#{MakeId.int_to_base(id,32)}\t#{MakeId.int_to_base(id,62)}"
+
+# NanoId: Print Nano Id
+id = MakeId.nano_id
+int = MakeId.base_to_int(id, 62)
+puts "NanoId:  \t#{id}\t#{MakeId.int_to_base(int,32)}\t#{int}"
+
+# EventId: Print Event Id
+id = MakeId.event_id
+int = MakeId.base_to_int(id, 62)
+puts "EventId:\t#{id}\t\t#{MakeId.int_to_base(int,32)}\t#{int}"

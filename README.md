@@ -59,9 +59,19 @@ The `epoch_uuid` method provides a time-based identifier, great for sorting just
     
     MakeId.epoch_uuid #=> "66d735c6-0be2-6517-da69-57d440987c18"
     u = MakeId.epoch_uuid #=> "66d735e6-7ac4-8bfc-5af0-39b4e2c96b05"
+    #------------------------->eeeeeeee-uuuw-wwrr-rrrr-rrrrrrrrrrrr
     
 Note that some databases support a UUID type which makes storing UUID's easier, and since they are stored as a binary
 field, consume less space.
+
+Want a ISO-like readable timestamp in your UUID? The `datetime_uuid` method combines elements of the
+snowflake id (below) and the human-readable ISO timestamp in the UUID. Also includes milliseconds,
+the "source id" for the snowflake id, and a randomized 12-byte field. This could be useful for time-series
+records or when you need a slowflake ID but have a UUID column to fill.
+
+    MakeID.datetime_uuid #=> "20240904-1418-5332-2000-3a38e61d5582"
+    #------------------------>YYYYMMDD-hhmm-ssuu-uwww-rrrrrrrrrrrr
+
 
 ### Random Integer
 

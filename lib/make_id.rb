@@ -22,6 +22,22 @@ module MakeId
   @@counter_time = 0
   @@counter = 0
 
+  # Returns a random alphanumeric string of the given base, default of 62.
+  # Base 64 uses URL-safe characters. Bases 19-32 and below use a special
+  # character set that avoids visually ambiguous characters. Other bases
+  # utilize the full alphanumeric characer set (digits, lower/upper letters).
+  def self.random(size = 16, base: 62)
+    raise "Base must be between 2 and 62, or 64, not #{base}" unless base < 63 || base == 64
+    if base == 62
+      SecureRandom.alphanumeric(size)
+    elsif base == 64
+      SecureRandom.urlsafe_base64(size)
+    else
+      alpha = (base <= 32) ? CHARS32 : CHARS62
+      (1..size).map { alpha[SecureRandom.rand(base - 1)] }.join
+    end
+  end
+
   ##############################################################################
   # Integers
   ##############################################################################
@@ -68,30 +84,37 @@ module MakeId
     (base == 10) ? int : int_to_base(int, base)
   end
 
-  # Returns UUID with columnar date parts : yymddhhm-mssu-uurr-rrrrrrrc
-  def self.datetime_uuid(time: nil, format: true)
-    time ||= Time.new.utc
-    parts = [
-      (time.year % @@epoch.year).to_s(16),
-      time.month.to_s(16),
-      time.day.to_s(16).rjust(2, "0"),
-      time.hour.to_s(16).rjust(2, "0"),
-      time.min.to_s(16).rjust(2, "0"),
-      time.sec.to_s(16).rjust(2, "0"),
-      (time.subsec.to_f * 4095).to_i.to_s(16).rjust(3, "0"),
-      SecureRandom.uuid.delete("-")[0, 17]
-    ]
-    id = append_check_digit(parts.join, 16).downcase
+  # Returns UUID with columnar date parts: yyyymmdd-hhmm-ssuu-uwww-rrrrrrrrrrrr
+  # This is similar to a snowflake id but in a UUID format.
+  def self.datetime_uuid(time: nil, format: true, source_id: nil, utc: true)
+    time ||= Time.new
+    time = time.utc if utc
+    source_id ||= snowflake_source_id
+    id = [
+      time.year,
+      time.month.to_s(16).rjust(2, "0"),
+      time.day.to_s.rjust(2, "0"),
+      time.hour.to_s.rjust(2, "0"),
+      time.min.to_s.rjust(2, "0"),
+      time.sec.to_s.rjust(2, "0"),
+      (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
+      (source_id % 1024).to_s(16).rjust(3, "0"),
+      SecureRandom.hex(6)
+    ].join
     format ? "#{id[0..7]}-#{id[8..11]}-#{id[12..15]}-#{id[16..19]}-#{id[20..31]}" : id
   end
 
-  # Returns uuid with epoch time sort in format: ssssssss-uuur-rrrr-rrrrrrrc
-  def self.epoch_uuid(time: nil, format: true)
-    time ||= Time.new.utc
+  # Returns uuid with epoch time sort in format: ssssssss-uuuw-wwrr-rrrr-rrrrrrrrrrrr
+  # This is similar to a snowflake id but in a UUID format.
+  def self.epoch_uuid(time: nil, format: true, source_id: nil, utc: true)
+    time ||= Time.new
+    time = time.utc if utc
+    source_id ||= snowflake_source_id
     parts = [
       time.to_i.to_s(16).rjust(8, "0"),
-      (time.subsec.to_f * 4095).to_i.to_s(16).rjust(3, "0"),
-      SecureRandom.uuid.delete("-")[0, 20]
+      (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
+      (source_id % 1024).to_s(16).rjust(3, "0"),
+      SecureRandom.hex(9)
     ]
     id = append_check_digit(parts.join, 16).downcase
     format ? "#{id[0..7]}-#{id[8..11]}-#{id[12..15]}-#{id[16..19]}-#{id[20..31]}" : id
@@ -104,10 +127,10 @@ module MakeId
   # Generates a "nano id", a string of random characters of the given alphabet,
   # suitable for URL's or where you don't want to show a sequential number.
   # A check digit is added to the end to help prevent typos.
-  def self.nano_id(size: 20, base: 62, check_digit: true, seed: nil)
-    alpha = (base <= 32) ? CHARS32 : CHARS62
+  def self.nano_id(size: 20, base: 62, check_digit: true)
+    # alpha = (base <= 32) ? CHARS32 : CHARS62
     size -= 1 if check_digit
-    id = (1..size).map { alpha[SecureRandom.rand(base - 1)] }.join
+    id = random(size, base: base)
     check_digit ? append_check_digit(id, base) : id
   end
 
