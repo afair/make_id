@@ -17,10 +17,41 @@ module MakeId
   CHARS62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
   EPOCH_TWITTER = Time.utc(2006, 3, 21, 20, 50, 14)
 
-  @@snowflake_source_id = ENV.fetch("SNOWFLAKE_SOURCE_ID", 0)
+  @@app_worker_id = ENV.fetch("APP_WORKER_ID", 0)
   @@epoch = Time.utc(2020)
   @@counter_time = 0
   @@counter = 0
+
+  # Set your default snowflake default id. This is a 10-bit number (0..1023)
+  # that designates your: datacenter, machine, and/or process that generated it.
+  # This can be overridden by setting the environment variable APP_WORKER_ID
+  # or by the caller.
+  # Usage (configuration): MakeId.app_worker_id = 123
+  def self.app_worker_id=(id)
+    @@app_worker_id = id.to_i & 0x3ff
+  end
+
+  # Returns the current worker id
+  def self.app_worker_id
+    @@app_worker_id
+  end
+
+  # Sets the start year for snowflake epoch
+  def self.epoch=(arg)
+    @@epoch = arg.is_a?(Time) ? arg : Time.utc(arg)
+  end
+
+  def self.epoch
+    @@epoch
+  end
+
+  def self.application_epoch
+    Time.now.to_i - @@epoch.to_i
+  end
+
+  ##############################################################################
+  # Random Strings
+  ##############################################################################
 
   # Returns a random alphanumeric string of the given base, default of 62.
   # Base 64 uses URL-safe characters. Bases 19-32 and below use a special
@@ -51,23 +82,6 @@ module MakeId
     id
   end
 
-  # Takes a traditional integer id number and returns a string that can
-  # be used to prevent id guessing in URL's. Experimental!
-  def self.obscure_id(int, base: 32, transform: true)
-    int = ((((int * 17) - 3) * 57) + 73) if transform
-    id = int_to_base(int, base)
-    append_check_digit(id, base)
-  end
-
-  # Takes an obscure_id created here and returns the encoded original integer value.
-  # Experimental!
-  def self.decode_obscure_id(id, base: 32, transform: true)
-    return nil unless id == append_check_digit(id[0..-2], base)
-    id = id[0..-2]
-    int = base_to_int(id, base: base)
-    transform ? ((((int - 73) / 57) + 3) / 17) : int
-  end
-
   ##############################################################################
   # UUID - Universally Unique Identifier
   ##############################################################################
@@ -86,10 +100,10 @@ module MakeId
 
   # Returns UUID with columnar date parts: yyyymmdd-hhmm-ssuu-uwww-rrrrrrrrrrrr
   # This is similar to a snowflake id but in a UUID format.
-  def self.datetime_uuid(time: nil, format: true, source_id: nil, utc: true)
+  def self.datetime_uuid(time: nil, format: true, worker_id: nil, utc: true)
     time ||= Time.new
     time = time.utc if utc
-    source_id ||= snowflake_source_id
+    worker_id ||= app_worker_id
     id = [
       time.year,
       time.month.to_s(16).rjust(2, "0"),
@@ -98,22 +112,24 @@ module MakeId
       time.min.to_s.rjust(2, "0"),
       time.sec.to_s.rjust(2, "0"),
       (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
-      (source_id % 1024).to_s(16).rjust(3, "0"),
+      (worker_id % 1024).to_s(16).rjust(3, "0"),
       SecureRandom.hex(6)
     ].join
     format ? "#{id[0..7]}-#{id[8..11]}-#{id[12..15]}-#{id[16..19]}-#{id[20..31]}" : id
   end
 
-  # Returns uuid with epoch time sort in format: ssssssss-uuuw-wwrr-rrrr-rrrrrrrrrrrr
+  # Returns uuid with Unix epoch time sort in format: ssssssss-uuuw-wwrr-rrrr-rrrrrrrrrrrr
+  # Specify `application_epoch: true` to use instead of Unix epoch
   # This is similar to a snowflake id but in a UUID format.
-  def self.epoch_uuid(time: nil, format: true, source_id: nil, utc: true)
+  def self.epoch_uuid(time: nil, format: true, worker_id: nil, application_epoch: false)
     time ||= Time.new
-    time = time.utc if utc
-    source_id ||= snowflake_source_id
+    seconds = time.to_i
+    seconds -= @@epoch.to_i if application_epoch
+    worker_id ||= app_worker_id
     parts = [
-      time.to_i.to_s(16).rjust(8, "0"),
+      seconds.to_s(16).rjust(8, "0"),
       (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
-      (source_id % 1024).to_s(16).rjust(3, "0"),
+      (worker_id % 1024).to_s(16).rjust(3, "0"),
       SecureRandom.hex(9)
     ]
     id = append_check_digit(parts.join, 16).downcase
@@ -143,23 +159,6 @@ module MakeId
     valid_check_digit?(nanoid, base: 32)
   end
 
-  # Returns a nano_id with id mapped within: "iiinnnnnnnnzc" where "iii" is the
-  # id in the given base, "nnnn" is the nano_id, and "z" is the length of the id,
-  # and "c" is a check digit.
-  def self.hybrid_nano_id(int, size: 10, base: 62, check_digit: true)
-    id = int_to_base(int, base)
-    z = id.length
-    id += nano_id(size: size - z - 1, base: base) + int_to_base(z, base)
-    check_digit ? append_check_digit(id, base) : id
-  end
-
-  def self.parse_hybrid_nano_id(id, base: 62)
-    return nil unless valid_check_digit?(id, base: base)
-    z = base_to_int(id[-1], base: base)
-    id = id[0, z]
-    base_to_int(id, base)
-  end
-
   ##############################################################################
   # Event Id - A nano_id, but timestamped event identifier: YMDHMSUUrrrrc
   ##############################################################################
@@ -183,45 +182,43 @@ module MakeId
     id[0, size]
   end
 
-  # MDHMSUrr
-  def self.request_id(size = 16)
+  # Returns a 16-character request id string in Base32 of format: YMDHsssuuqqwwrrr
+  # Use substring [3, 8] (Hsssuuqq) for a short 8-character version, easier for human scanning.
+  def self.request_id(time: nil, sequence_method: :counter)
+    time ||= Time.new
+    seconds = time.to_i - Time.new(time.year, time.month, time.day, time.hour).to_i # time.utc.hour??
+
+    sequence = if sequence_method == :counter
+      next_millisecond_sequence(((Time.now.utc.to_f - @@epoch.to_i) * 1000).to_i)
+    elsif sequence_method == :random
+      SecureRandom.random_number(4095)
+    end
+
+    [
+      CHARS62[time.year % @@epoch.year],
+      CHARS62[time.month],
+      CHARS62[time.day], # "-",
+      CHARS62[time.hour].downcase,
+      int_to_base(seconds, 32).rjust(3, "0"), # 3 chars
+      int_to_base((time.subsec.to_f * 32 * 32).to_i, 32), # 2 chars
+      sequence.to_s(32).rjust(2, "0"), # 2 chars "-",
+      (app_worker_id % 1024).to_s(32).rjust(2, "0"), # 2 chars
+      random(3, base: 32)
+    ].join
   end
 
   ##############################################################################
-  # Snowflake Id - Epoch + millisecond + source id + sequence number
+  # Snowflake Id - Epoch + millisecond + worker_id id + sequence number
   # Snowflakes are a form of unique identifier used in distributed computing.
-  # Uses an epoch time with miliseconds (41 bits), a source id of where it was
+  # Uses an epoch time with miliseconds (41 bits), a worker_id id of where it was
   # created (datacenter, machine, process, 10 bits), and a sequence number (12 bits).
   ##############################################################################
 
-  # Set your default snowflake default id. This is a 10-bit number (0..1023)
-  # that designates your: datacenter, machine, and/or process that generated it.
-  # This can be overridden by setting the environment variable SNOWFLAKE_SOURCE_ID
-  # or by the caller.
-  # Usage (configuration): MakeId.snowflake_source_id = 123
-  def self.snowflake_source_id=(id)
-    @@snowflake_source_id = id.to_i & 0x3ff
-  end
-
-  # Returns the current snowflake source id
-  def self.snowflake_source_id
-    @@snowflake_source_id
-  end
-
-  # Sets the start year for snowflake epoch
-  def self.epoch=(arg)
-    @@epoch = arg.is_a?(Time) ? arg : Time.utc(arg)
-  end
-
-  def self.epoch
-    @@epoch
-  end
-
   # Returns an 8-byte integer snowflake id that can be reverse parsed.
   # sequence_counter can be :counter for a rotating integer, or :random
-  def self.snowflake_id(source_id: nil, base: 10, sequence_method: :counter)
+  def self.snowflake_id(worker_id: nil, base: 10, sequence_method: :counter)
     milliseconds = ((Time.now.utc.to_f - @@epoch.to_i) * 1000).to_i
-    source_id ||= snowflake_source_id
+    worker_id ||= app_worker_id
     sequence = 0
     if sequence_method == :counter
       sequence = next_millisecond_sequence(milliseconds)
@@ -229,15 +226,15 @@ module MakeId
       sequence = SecureRandom.random_number(4095)
     end
 
-    id = combine_snowflake_parts(milliseconds, source_id, sequence)
+    id = combine_snowflake_parts(milliseconds, worker_id, sequence)
     (base == 10) ? id : int_to_base(id, base)
   end
 
   # Creates the final snowflake by bit-mapping the constituent parts into the whole
-  def self.combine_snowflake_parts(milliseconds, source_id, sequence)
+  def self.combine_snowflake_parts(milliseconds, worker_id, sequence)
     id = milliseconds & 0x1ffffffffff # 0 (sign) + lower 41bits
     id <<= 10
-    id |= source_id & 0x3ff # 10bits (0..1023)
+    id |= worker_id & 0x3ff # 10bits (0..1023)
     id <<= 12
     id |= (sequence & 0xfff) # 12 bits (0..4095)
 

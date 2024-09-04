@@ -23,6 +23,9 @@ puts "DateTimeUUId:\t#{id}\t#{int}\t#{MakeId.int_to_base(int,32)}\t#{MakeId.int_
 id = MakeId.epoch_uuid
 int = MakeId.uuid_to_base(id)
 puts "EpochUUID:\t#{id}\t#{int}\t#{MakeId.int_to_base(int,32)}\t#{MakeId.int_to_base(int,62)}"
+id = MakeId.epoch_uuid(application_epoch: true)
+int = MakeId.uuid_to_base(id)
+puts "AppEpochUUID:\t#{id}\t#{int}\t#{MakeId.int_to_base(int,32)}\t#{MakeId.int_to_base(int,62)}"
 
 # RandomId: Print random Id, Random Id converted to base 10, Random Id converted to base 32, Random Id converted to base 62
 id = MakeId.random_id
@@ -41,3 +44,7 @@ puts "NanoId:  \t#{id}\t#{MakeId.int_to_base(int,32)}\t#{int}"
 id = MakeId.event_id
 int = MakeId.base_to_int(id, 62)
 puts "EventId:\t#{id}\t\t#{MakeId.int_to_base(int,32)}\t#{int}"
+
+# RequesetId: Print it
+id = MakeId.request_id
+puts "RequestId:\t#{id}\t\t#{id[3,8]}"

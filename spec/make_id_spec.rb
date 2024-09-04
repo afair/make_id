@@ -45,17 +45,20 @@ RSpec.describe MakeId do
     it "generates the nano_id" do
       expect(MakeId.nano_id).to match(/\A[0-9A-Za-z]{20}\z/)
     end
+
+    it "request_id" do
+      expect(MakeId.request_id.size).to eq(16)
+    end
   end
 
   describe "snowflake_id" do
     it "generates the snowflake_id" do
-      id = MakeId.snowflake_id(source_id: 15)
+      id = MakeId.snowflake_id(worker_id: 15)
       expect(id.to_s.size).to be > 10
     end
 
     it "makes base-62 flakes" do
-      # 1000.times { p(MakeId.snowflake_id(source_id: 15, base: 64)) }
-      expect(MakeId.snowflake_id(source_id: 0, base: 62).size).to be > 6
+      expect(MakeId.snowflake_id(worker_id: 0, base: 62).size).to be > 6
     end
   end
 

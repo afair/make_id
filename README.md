@@ -40,9 +40,9 @@ The Base32 may seem out of place, but is useful for alpha-numeric codes the user
 All letter are folded to upper-case, and ambiguous characters are converted to the canonical ones.
 
     MakeId.int_to_base(123456789, 32) #=> "3nqk8n"
-    MakeId.from_base("3nqk8n", 10) #=> 123456789
+    MakeId.from_base("3nqk8n", 10)    #=> 123456789
     MakeId.int_to_base(123456789, 32) #=> "3nqk8n"
-    MakeId.verify_nano32_id("...") #=> corrected_id or nil if error
+    MakeId.verify_nano32_id("...")    #=> corrected_id or nil if error
 
 ### UUID
 
@@ -66,7 +66,7 @@ field, consume less space.
 
 Want a ISO-like readable timestamp in your UUID? The `datetime_uuid` method combines elements of the
 snowflake id (below) and the human-readable ISO timestamp in the UUID. Also includes milliseconds,
-the "source id" for the snowflake id, and a randomized 12-byte field. This could be useful for time-series
+the "worker id" for the snowflake id, and a randomized 12-byte field. This could be useful for time-series
 records or when you need a slowflake ID but have a UUID column to fill.
 
     MakeID.datetime_uuid #=> "20240904-1418-5332-2000-3a38e61d5582"
@@ -91,13 +91,22 @@ ensuring you have enough characters to avoid predictable collisions in the futur
     MakeId.nano_id(size: 16) #=> "iZnLn96FVcjivEJA"
     MakeId.nano_id(size: 16, base: 32) #=> "sf8kqb8ekn7k98rq"
 
+A `request_id` is a nano_id that can be used to track requests and jobs. It is a 16-byte string, the same
+storage as a UUID, but with columnar values. The substring of 3 for 8 is a short (8 character) version that
+can be used as well, is easier to read, sortable within a day, and unique enough to work with.
+
+    id = MakeId.request_id #=> "494f1272t01000c4"
+    #-------------------------->YMDHsssuuqqwwrrr
+    id[3,8]                #=> "f1272t01"
+    #-------------------------->Hsssuuqq
+
 ### Snowflake Id
 
 Snowflakes were invented at Twitter to stamp an identifier for a tweet or direct message.
 It is an 8-byte integer intended to be time-sorted and unique across the fleet of servers saving messages.
 It is a bit-mapped integer consisting of these parts:
 * "Application Epoch" milliseconds (number of seconds since the designated start). positive sign and 41 bits.
-* "Source Id", a number from 0..1023 (10 bits) used to designate the datacenter, server, and/or process generating the id.
+* "Worker Id", a number from 0..1023 (10 bits) used to designate the datacenter, server, and/or process generating the id.
 * "Sequence Id", a number from 0..4095 (12 bits) of messages within the given millisecond, or a random number within.
 
 The application epoch is the start time before data was generated. This is set by passing a year integer or Time object.
@@ -108,14 +117,14 @@ higher order bits are removed. Therefore, limit the size of your epoch to a late
     MakeId.snowflake_id => 618906575771271168
     #--------------------->eeeeeeeeeeuuussrrr (Bit breakdown for understanding, not to scale)
 
-The `source_id` defaults to 0 and can be set with the SNOWFLAKE_SOURCE_ID environment variable or call
+The `worker_id` defaults to 0 and can be set with the APP_WORKER_ID environment variable or call
 to a setter at the startup of the application. Set with a number appropriate for your environment.
 
 You can also pass in options to return it as a different base, and with a check digit.
 
-    MakeId.snowflake_source_id = 234
-    MakeId.snowflake_id => 618905333721374720
-    MakeId.snowflake_id(source_id: 12, base: 32, sequence_method: :random) #=> "2tmxk6ne81jd5"
+    MakeId.app_worker_id = 234
+    MakeId.app_worker_id => 618905333721374720
+    MakeId.snowflake_id(worker_id: 12, base: 32, sequence_method: :random) #=> "2tmxk6ne81jd5"
 
 ### Event Id
 
