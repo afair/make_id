@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "make_id/version"
-require "SecureRandom"
+require "securerandom"
 require "base64"
 require "zlib"
 
@@ -30,7 +30,7 @@ module MakeId
   def self.random_id(bytes: 8, base: 10, absolute: true, check_digit: false)
     id = SecureRandom.random_number(2**(bytes * 8) - 2) + 1 # +1 to avoid zero
     id = id.abs if absolute
-    id = to_base(id, base) unless base == 10
+    id = int_to_base(id, base) unless base == 10
     id = append_check_digit(id, base) if check_digit
     id
   end
@@ -39,7 +39,7 @@ module MakeId
   # be used to prevent id guessing in URL's. Experimental!
   def self.obscure_id(int, base: 32, transform: true)
     int = ((((int * 17) - 3) * 57) + 73) if transform
-    id = to_base(int, base)
+    id = int_to_base(int, base)
     append_check_digit(id, base)
   end
 
@@ -48,7 +48,7 @@ module MakeId
   def self.decode_obscure_id(id, base: 32, transform: true)
     return nil unless id == append_check_digit(id[0..-2], base)
     id = id[0..-2]
-    int = from_base(id, base: base)
+    int = base_to_int(id, base: base)
     transform ? ((((int - 73) / 57) + 3) / 17) : int
   end
 
@@ -65,7 +65,7 @@ module MakeId
   # If base is specified, it will convert to that base using MakeId utilities.
   def self.uuid_to_base(uuid, base = 10)
     int = uuid.delete("-").to_i(16)
-    (base == 10) ? int : to_base(int, base)
+    (base == 10) ? int : int_to_base(int, base)
   end
 
   # Returns UUID with columnar date parts : yymddhhm-mssu-uurr-rrrrrrrc
@@ -124,17 +124,17 @@ module MakeId
   # id in the given base, "nnnn" is the nano_id, and "z" is the length of the id,
   # and "c" is a check digit.
   def self.hybrid_nano_id(int, size: 10, base: 62, check_digit: true)
-    id = to_base(int, base)
+    id = int_to_base(int, base)
     z = id.length
-    id += nano_id(size: size - z - 1, base: base) + to_base(z, base)
+    id += nano_id(size: size - z - 1, base: base) + int_to_base(z, base)
     check_digit ? append_check_digit(id, base) : id
   end
 
   def self.parse_hybrid_nano_id(id, base: 62)
     return nil unless valid_check_digit?(id, base: base)
-    z = from_base(id[-1], base: base)
+    z = base_to_int(id[-1], base: base)
     id = id[0, z]
-    from_base(id, base)
+    base_to_int(id, base)
   end
 
   ##############################################################################
@@ -144,7 +144,7 @@ module MakeId
   # Returns an event timestamp of the form YMDHMSUUrrrrc
   def self.event_id(size: 12, check_digit: false, time: nil)
     time ||= Time.new.utc
-    usec = to_base((time.subsec.to_f * 62 * 62).to_i, 62)
+    usec = int_to_base((time.subsec.to_f * 62 * 62).to_i, 62)
     parts = [
       CHARS62[time.year % @@epoch.year],
       CHARS62[time.month],
@@ -207,7 +207,7 @@ module MakeId
     end
 
     id = combine_snowflake_parts(milliseconds, source_id, sequence)
-    (base == 10) ? id : to_base(id, base)
+    (base == 10) ? id : int_to_base(id, base)
   end
 
   # Creates the final snowflake by bit-mapping the constituent parts into the whole
@@ -235,6 +235,15 @@ module MakeId
     end
 
     sequence
+  end
+
+  # Build an integer value from pairs of [bits, value]
+  def self.pack_int_parts(*pairs)
+    int = 0
+    pairs.each do |bits, value|
+      int = (int << bits) | (value & ((1 << bits) - 1))
+    end
+    int
   end
 
   ##############################################################################
@@ -297,7 +306,7 @@ module MakeId
 
   # Returns a character computed using the CRC32 algorithm
   def self.compute_check_digit(id, base = 10)
-    to_base(Zlib.crc32(id.to_s) % base, base)
+    int_to_base(Zlib.crc32(id.to_s) % base, base)
   end
 
   # Takes an id with a check digit and return true if the check digit matches
