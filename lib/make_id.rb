@@ -21,6 +21,7 @@ module MakeId
   @@epoch = Time.utc(2020)
   @@counter_time = 0
   @@counter = 0
+  @@check_proc = nil
 
   # Set your default snowflake default id. This is a 10-bit number (0..1023)
   # that designates your: datacenter, machine, and/or process that generated it.
@@ -34,6 +35,12 @@ module MakeId
   # Returns the current worker id
   def self.app_worker_id
     @@app_worker_id
+  end
+
+  # Set a custom check digit proc that takes the id string and base as argumentsA
+  # and returns a character to append to the end of the id.
+  def self.check_proc=(proc)
+    @@check_proc = proc
   end
 
   # Sets the start year for snowflake epoch
@@ -98,44 +105,6 @@ module MakeId
     (base == 10) ? int : int_to_base(int, base)
   end
 
-  # Returns UUID with columnar date parts: yyyymmdd-hhmm-ssuu-uwww-rrrrrrrrrrrr
-  # This is similar to a snowflake id but in a UUID format.
-  def self.datetime_uuid(time: nil, format: true, worker_id: nil, utc: true)
-    time ||= Time.new
-    time = time.utc if utc
-    worker_id ||= app_worker_id
-    id = [
-      time.year,
-      time.month.to_s(16).rjust(2, "0"),
-      time.day.to_s.rjust(2, "0"),
-      time.hour.to_s.rjust(2, "0"),
-      time.min.to_s.rjust(2, "0"),
-      time.sec.to_s.rjust(2, "0"),
-      (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
-      (worker_id % 1024).to_s(16).rjust(3, "0"),
-      SecureRandom.hex(6)
-    ].join
-    format ? "#{id[0..7]}-#{id[8..11]}-#{id[12..15]}-#{id[16..19]}-#{id[20..31]}" : id
-  end
-
-  # Returns uuid with Unix epoch time sort in format: ssssssss-uuuw-wwrr-rrrr-rrrrrrrrrrrr
-  # Specify `application_epoch: true` to use instead of Unix epoch
-  # This is similar to a snowflake id but in a UUID format.
-  def self.epoch_uuid(time: nil, format: true, worker_id: nil, application_epoch: false)
-    time ||= Time.new
-    seconds = time.to_i
-    seconds -= @@epoch.to_i if application_epoch
-    worker_id ||= app_worker_id
-    parts = [
-      seconds.to_s(16).rjust(8, "0"),
-      (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
-      (worker_id % 1024).to_s(16).rjust(3, "0"),
-      SecureRandom.hex(9)
-    ]
-    id = append_check_digit(parts.join, 16).downcase
-    format ? "#{id[0..7]}-#{id[8..11]}-#{id[12..15]}-#{id[16..19]}-#{id[20..31]}" : id
-  end
-
   ##############################################################################
   # Nano Id - Simple, secure URL-friendly unique string ID generator
   ##############################################################################
@@ -157,6 +126,25 @@ module MakeId
     nanoid.gsub!(/[lLiI]/, "1")
     nanoid.downcase
     valid_check_digit?(nanoid, base: 32)
+  end
+
+  # Manual Id is a code and/or identifier that is manually entered by a user.
+  # Examples of this would be a Two-Factor Authentication challenge, a code
+  # used for confirmation, redemption, or a short-term record lookup code
+  # (like an airline ticket/itenerary code)
+  # It uses a base-32 (non-ambiguous character set) by default,
+  def self.manual_id(size: 6, base: 32, check_digit: false)
+    base = 32 if base > 36 # For upcasing
+    nano_id(size: size, base: base, check_digit: check_digit).upcase
+  end
+
+  def self.fix_manual_id(id, base: 32, check_digit: false)
+    if base == 32
+      id = id.gsub(/[oO]/, "0")
+      id = id.gsub(/[lLiI]/, "1")
+    end
+    id = valid_check_digit?(id.downcase, base: 32) if check_digit
+    id.upcase
   end
 
   ##############################################################################
@@ -228,6 +216,42 @@ module MakeId
 
     id = combine_snowflake_parts(milliseconds, worker_id, sequence)
     (base == 10) ? id : int_to_base(id, base)
+  end
+
+  # Returns uuid with Unix epoch time sort in format: ssssssss-uuuw-wwrr-rrrr-rrrrrrrrrrrr
+  # Specify `application_epoch: true` to use instead of Unix epoch
+  def self.snowflake_uuid(time: nil, format: true, worker_id: nil, application_epoch: false)
+    time ||= Time.new
+    seconds = time.to_i
+    seconds -= @@epoch.to_i if application_epoch
+    worker_id ||= app_worker_id
+    parts = [
+      seconds.to_s(16).rjust(8, "0"),
+      (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
+      (worker_id % 1024).to_s(16).rjust(3, "0"),
+      SecureRandom.hex(9)
+    ]
+    id = append_check_digit(parts.join, 16).downcase
+    format ? "#{id[0..7]}-#{id[8..11]}-#{id[12..15]}-#{id[16..19]}-#{id[20..31]}" : id
+  end
+
+  # Returns UUID with columnar date parts: yyyymmdd-hhmm-ssuu-uwww-rrrrrrrrrrrr
+  def self.snowflake_datetime_uuid(time: nil, format: true, worker_id: nil, utc: true)
+    time ||= Time.new
+    time = time.utc if utc
+    worker_id ||= app_worker_id
+    id = [
+      time.year,
+      time.month.to_s.rjust(2, "0"),
+      time.day.to_s.rjust(2, "0"),
+      time.hour.to_s.rjust(2, "0"),
+      time.min.to_s.rjust(2, "0"),
+      time.sec.to_s.rjust(2, "0"),
+      (time.subsec.to_f * 1000).to_i.to_s(16).rjust(3, "0"),
+      (worker_id % 1024).to_s(16).rjust(3, "0"),
+      SecureRandom.hex(6)
+    ].join
+    format ? "#{id[0..7]}-#{id[8..11]}-#{id[12..15]}-#{id[16..19]}-#{id[20..31]}" : id
   end
 
   # Creates the final snowflake by bit-mapping the constituent parts into the whole
@@ -325,7 +349,9 @@ module MakeId
   end
 
   # Returns a character computed using the CRC32 algorithm
+  # Uses a pre-defined check_proc if configured. See check_proc=().
   def self.compute_check_digit(id, base = 10)
+    return @@check_proc.call(id, base) if @@check_proc.is_a?(Proc)
     int_to_base(Zlib.crc32(id.to_s) % base, base)
   end
 

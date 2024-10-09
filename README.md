@@ -55,21 +55,21 @@ can be used to transform a long UUID into a possibly more palettable base repres
     MakeId.uuid_to_base(u, 10) #=> 29248580887982686871727313613986053372 (38 characters)
     MakeId.uuid_to_base(u, 62) #=> "fWJtuXEQJnkjxroWjkmei" (21 characters)
     
-The `epoch_uuid` method provides a time-based identifier, great for sorting just as sequential numbers, but unique enough to fit the bill.
+The `snowflake_uuid` method provides a time-based identifier, great for sorting just as sequential numbers, but unique enough to fit the bill.
     
-    MakeId.epoch_uuid #=> "66d735c6-0be2-6517-da69-57d440987c18"
-    u = MakeId.epoch_uuid #=> "66d735e6-7ac4-8bfc-5af0-39b4e2c96b05"
+    MakeId.snowflake_uuid # w> "66d735c6-0be2-6517-da69-57d440987c18"
+    u = MakeId.snowflake_uuid #=> "66d735e6-7ac4-8bfc-5af0-39b4e2c96b05"
     #------------------------->eeeeeeee-uuuw-wwrr-rrrr-rrrrrrrrrrrr
     
 Note that some databases support a UUID type which makes storing UUID's easier, and since they are stored as a binary
 field, consume less space.
 
-Want a ISO-like readable timestamp in your UUID? The `datetime_uuid` method combines elements of the
+Want a ISO-like readable timestamp in your UUID? The `snowflake_datetime_uuid` method combines elements of the
 snowflake id (below) and the human-readable ISO timestamp in the UUID. Also includes milliseconds,
 the "worker id" for the snowflake id, and a randomized 12-byte field. This could be useful for time-series
 records or when you need a slowflake ID but have a UUID column to fill.
 
-    MakeID.datetime_uuid #=> "20240904-1418-5332-2000-3a38e61d5582"
+    MakeID.snowflake_datetime_uuid #=> "20240904-1418-5332-2000-3a38e61d5582"
     #------------------------>YYYYMMDD-hhmm-ssuu-uwww-rrrrrrrrrrrr
 
 
@@ -123,7 +123,7 @@ to a setter at the startup of the application. Set with a number appropriate for
 You can also pass in options to return it as a different base, and with a check digit.
 
     MakeId.app_worker_id = 234
-    MakeId.app_worker_id => 618905333721374720
+    MakeId.snowflake_id => 618905333721374720
     MakeId.snowflake_id(worker_id: 12, base: 32, sequence_method: :random) #=> "2tmxk6ne81jd5"
 
 ### Event Id

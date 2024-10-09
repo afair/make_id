@@ -18,8 +18,12 @@ RSpec.describe MakeId do
       expect(MakeId.uuid).to match(/\A[0-9a-f]{8}-([0-9a-f]{4}-){3}[0-9a-f]{12}\z/)
     end
 
-    it "epoch_uuid" do
-      expect(MakeId.epoch_uuid).to match(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
+    it "snowflake_uuid" do
+      expect(MakeId.snowflake_uuid).to match(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
+    end
+
+    it "snowflake_datetime_uuid" do
+      expect(MakeId.snowflake_datetime_uuid).to match(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
     end
 
     it "converts uuids to bases" do
@@ -44,6 +48,14 @@ RSpec.describe MakeId do
   describe "nano_id" do
     it "generates the nano_id" do
       expect(MakeId.nano_id).to match(/\A[0-9A-Za-z]{20}\z/)
+    end
+
+    it "manual_id" do
+      expect(MakeId.manual_id).to match(/\A[0-9A-Z]{6}\z/)
+    end
+
+    it "fix_manual_id" do
+      expect(MakeId.fix_manual_id("1liO0a")).to eq("11100A")
     end
 
     it "request_id" do
