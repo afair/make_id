@@ -1,6 +1,6 @@
 # MakeId
 
-MakeID is a ruby library containing data record identifier generators. 
+MakeID is a ruby library containing data record identifier generators. Perhaps it is a library of *identifier patterns*?
 
 Most databases use a sequential, auto-incrementing number as the primary key. For example, in PostgreSQL this is implemented using sequences.
 
@@ -18,6 +18,14 @@ or by placing in your Gemfile, or running this bundler command:
     
 Alternatively, you can skip the dependency and "adopt" the primary file within this repo, `lib/make_id.rb`,
 keeping the attribution comments to find upstream documentation, fixes, and new features.
+
+Another good alternative to using sequential id's is an alternate or external id used for URL's. This external
+id can be generated id of any of these schemes, along with a unique index on the column. This gives you the ease
+of a standard sequential id, with the security of a randomly-generated identifier.
+
+When storing a string key in the database, look at using fixed-size columns instead of "characer varying" strings
+as these have an additional cost of storing the length (PostgreSQL uses 4 bytes). Also, consider index performance
+as these id's will likely require a unique index.
 
 ## Usage
 
@@ -44,6 +52,15 @@ All letter are folded to upper-case, and ambiguous characters are converted to t
     MakeId.int_to_base(123456789, 32) #=> "3nqk8n"
     MakeId.verify_nano32_id("...")    #=> corrected_id or nil if error
 
+### Random Integer
+
+MakeId can return a random (8-byte by default) integer. You can request it returned in a supported base,
+and with an optional check_digit.
+Usually, you would use the integer returned, and call `int_to_base` to format for a URL or code.
+
+    MakeId.random_id() #=> 15379918763975837985
+    MakeId.random_id(base: 62, check_digit: true) #=> "2984biEwRT1"
+
 ### UUID
 
 UUID are 16-byte numbers, usually represented in hexadecimal of the format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
@@ -55,32 +72,8 @@ can be used to transform a long UUID into a possibly more palettable base repres
     MakeId.uuid_to_base(u, 10) #=> 29248580887982686871727313613986053372 (38 characters)
     MakeId.uuid_to_base(u, 62) #=> "fWJtuXEQJnkjxroWjkmei" (21 characters)
     
-The `snowflake_uuid` method provides a time-based identifier, great for sorting just as sequential numbers, but unique enough to fit the bill.
-    
-    MakeId.snowflake_uuid # w> "66d735c6-0be2-6517-da69-57d440987c18"
-    u = MakeId.snowflake_uuid #=> "66d735e6-7ac4-8bfc-5af0-39b4e2c96b05"
-    #------------------------->eeeeeeee-uuuw-wwrr-rrrr-rrrrrrrrrrrr
-    
 Note that some databases support a UUID type which makes storing UUID's easier, and since they are stored as a binary
 field, consume less space.
-
-Want a ISO-like readable timestamp in your UUID? The `snowflake_datetime_uuid` method combines elements of the
-snowflake id (below) and the human-readable ISO timestamp in the UUID. Also includes milliseconds,
-the "worker id" for the snowflake id, and a randomized 12-byte field. This could be useful for time-series
-records or when you need a slowflake ID but have a UUID column to fill.
-
-    MakeID.snowflake_datetime_uuid #=> "20240904-1418-5332-2000-3a38e61d5582"
-    #------------------------>YYYYMMDD-hhmm-ssuu-uwww-rrrrrrrrrrrr
-
-
-### Random Integer
-
-MakeId can return a random (8-byte by default) integer. You can request it returned in a supported base,
-and with an optional check_digit.
-Usually, you would use the integer returned, and call `int_to_base` to format for a URL or code.
-
-    MakeId.random_id() #=> 15379918763975837985
-    MakeId.random_id(base: 62, check_digit: true) #=> "2984biEwRT1"
 
 ### Nano Id
 
@@ -126,7 +119,21 @@ You can also pass in options to return it as a different base, and with a check 
     MakeId.snowflake_id => 618905333721374720
     MakeId.snowflake_id(worker_id: 12, base: 32, sequence_method: :random) #=> "2tmxk6ne81jd5"
 
-### Event Id
+The `snowflake_uuid` method provides a time-based identifier, great for sorting just as sequential numbers, but unique enough to fit the bill.
+    
+    MakeId.snowflake_uuid # w> "66d735c6-0be2-6517-da69-57d440987c18"
+    u = MakeId.snowflake_uuid #=> "66d735e6-7ac4-8bfc-5af0-39b4e2c96b05"
+    #------------------------->eeeeeeee-uuuw-wwrr-rrrr-rrrrrrrrrrrr
+    
+Want a ISO-like readable timestamp in your UUID? The `snowflake_datetime_uuid` method combines elements of the
+snowflake id (below) and the human-readable ISO timestamp in the UUID. Also includes milliseconds,
+the "worker id" for the snowflake id, and a randomized 12-byte field. This could be useful for time-series
+records or when you need a slowflake ID but have a UUID column to fill.
+
+    MakeID.snowflake_datetime_uuid #=> "20240904-1418-5332-2000-3a38e61d5582"
+    #------------------------>YYYYMMDD-hhmm-ssuu-uwww-rrrrrrrrrrrr
+
+## Experimental Id's
 
 The `event_id` is a string, sortable by creation time, with visible time seperator columns.
 It is of the format "YMDhmsuurrrr", using Base62, with an optional check_sum characer.
@@ -135,14 +142,8 @@ seconds that can be represented in Base62, and a 4-character random Base64 "nano
 
     MakeId.epoch = 2020
     MakeId.event_id #=> "493KgpQGErTB"
-    #------------------->YMDhmsuurrrr
+    #------------------->YMDhmsuurrrr ()
     MakeId.event_id(check_digit: true) #=> "493Kkha6HZa2" (3 random chars + check digit)
-
-### External Id
-
-Another good alternative to using sequential id's is an alternate or external id used for URL's. This external
-id can be generated id of any of these schemes, along with a unique index on the column. This gives you the ease
-of a standard sequential id, with the security of a randomly-generated identifier.
 
 ## Development
 

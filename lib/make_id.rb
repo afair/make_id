@@ -121,7 +121,7 @@ module MakeId
 
   # Given a nano_id, replaces visually ambiguous characters and verifies the
   # check digit. Returns the corrected id or nil if the check digit is invalid.
-  def self.verify_nano32_id(nanoid)
+  def self.verify_base32_id(nanoid)
     nanoid.gsub!(/[oO]/, "0")
     nanoid.gsub!(/[lLiI]/, "1")
     nanoid.downcase
