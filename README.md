@@ -1,6 +1,7 @@
 # MakeId
 
-MakeID is a ruby library containing data record identifier generators. Perhaps it is a library of *identifier patterns*?
+MakeID is a ruby library containing data record identifier generators. Perhaps it is a library of _identifier patterns_?
+Let me know (by pull request) if you have any useful standard (or should be) id types.
 
 Most databases use a sequential, auto-incrementing number as the primary key. For example, in PostgreSQL this is implemented using sequences.
 
@@ -11,11 +12,11 @@ Not every data "id" wants to use sequential numbers. These can be easy to guess 
 This is a gem, and is installed as such:
 
     gem install make_id
-    
+
 or by placing in your Gemfile, or running this bundler command:
 
     bundle add make_id
-    
+
 Alternatively, you can skip the dependency and "adopt" the primary file within this repo, `lib/make_id.rb`,
 keeping the attribution comments to find upstream documentation, fixes, and new features.
 
@@ -38,11 +39,12 @@ convert to and from its supported bases. You can leverage these for URL Id's to 
 numeric codes.
 
 Bases supported are:
-* Base62: digits, upper, and lower-case letters. No special characters
-* Base32: digits and upper case without ambiguous characters "1lI" or "oO0"
-* Base 2 through 36 (except 32): Ruby's `Integer#to_s(base)` is used
-* Base64: Uses the `Base64.urlsafe_encode64` such has 2 special characters.
-* Base63: It is not implemented.
+
+- Base62: digits, upper, and lower-case letters. No special characters
+- Base32: digits and upper case without ambiguous characters "1lI" or "oO0"
+- Base 2 through 36 (except 32): Ruby's `Integer#to_s(base)` is used
+- Base64: Uses the `Base64.urlsafe_encode64` such has 2 special characters.
+- Base63: It is not implemented.
 
 The Base32 may seem out of place, but is useful for alpha-numeric codes the users are required to type, such as redemption codes.
 All letter are folded to upper-case, and ambiguous characters are converted to the canonical ones.
@@ -50,7 +52,7 @@ All letter are folded to upper-case, and ambiguous characters are converted to t
     MakeId.int_to_base(123456789, 32) #=> "3nqk8n"
     MakeId.from_base("3nqk8n", 10)    #=> 123456789
     MakeId.int_to_base(123456789, 32) #=> "3nqk8n"
-    MakeId.verify_nano32_id("...")    #=> corrected_id or nil if error
+    MakeId.verify_base32_id("...")    #=> corrected_id or nil if error
 
 ### Random Integer
 
@@ -58,22 +60,22 @@ MakeId can return a random (8-byte by default) integer. You can request it retur
 and with an optional check_digit.
 Usually, you would use the integer returned, and call `int_to_base` to format for a URL or code.
 
-    MakeId.random_id() #=> 15379918763975837985
+    MakeId.random_id() #=> 15379918763975837985ZZ
     MakeId.random_id(base: 62, check_digit: true) #=> "2984biEwRT1"
 
 ### UUID
 
 UUID are 16-byte numbers, usually represented in hexadecimal of the format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 There are different schemes for UUID types, and each has it's use. Most record Id's use a randomly generated UUID,
-which if very unlikely (but possible) to have collitions with existing keys.  The `uuid_to_base` helper method
+which if very unlikely (but possible) to have collitions with existing keys. The `uuid_to_base` helper method
 can be used to transform a long UUID into a possibly more palettable base representation.
 
     u = MakeId.uuid #=> "1601125f-ee7c-4c0b-b693-dd2265edbcfc"
     MakeId.uuid_to_base(u, 10) #=> 29248580887982686871727313613986053372 (38 characters)
     MakeId.uuid_to_base(u, 62) #=> "fWJtuXEQJnkjxroWjkmei" (21 characters)
-    
+
 Note that some databases support a UUID type which makes storing UUID's easier, and since they are stored as a binary
-field, consume less space.
+field, consume less space.ZZ
 
 ### Nano Id
 
@@ -98,9 +100,10 @@ can be used as well, is easier to read, sortable within a day, and unique enough
 Snowflakes were invented at Twitter to stamp an identifier for a tweet or direct message.
 It is an 8-byte integer intended to be time-sorted and unique across the fleet of servers saving messages.
 It is a bit-mapped integer consisting of these parts:
-* "Application Epoch" milliseconds (number of seconds since the designated start). positive sign and 41 bits.
-* "Worker Id", a number from 0..1023 (10 bits) used to designate the datacenter, server, and/or process generating the id.
-* "Sequence Id", a number from 0..4095 (12 bits) of messages within the given millisecond, or a random number within.
+
+- "Application Epoch" milliseconds (number of seconds since the designated start). positive sign and 41 bits.
+- "Worker Id", a number from 0..1023 (10 bits) used to designate the datacenter, server, and/or process generating the id.
+- "Sequence Id", a number from 0..4095 (12 bits) of messages within the given millisecond, or a random number within.
 
 The application epoch is the start time before data was generated. This is set by passing a year integer or Time object.
 The default is 2020 for the library. Because there are only 41 bits for the `time * 1000` (milliseconds),
@@ -120,11 +123,11 @@ You can also pass in options to return it as a different base, and with a check 
     MakeId.snowflake_id(worker_id: 12, base: 32, sequence_method: :random) #=> "2tmxk6ne81jd5"
 
 The `snowflake_uuid` method provides a time-based identifier, great for sorting just as sequential numbers, but unique enough to fit the bill.
-    
+
     MakeId.snowflake_uuid # w> "66d735c6-0be2-6517-da69-57d440987c18"
     u = MakeId.snowflake_uuid #=> "66d735e6-7ac4-8bfc-5af0-39b4e2c96b05"
     #------------------------->eeeeeeee-uuuw-wwrr-rrrr-rrrrrrrrrrrr
-    
+
 Want a ISO-like readable timestamp in your UUID? The `snowflake_datetime_uuid` method combines elements of the
 snowflake id (below) and the human-readable ISO timestamp in the UUID. Also includes milliseconds,
 the "worker id" for the snowflake id, and a randomized 12-byte field. This could be useful for time-series
