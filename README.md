@@ -40,18 +40,19 @@ numeric codes.
 
 Bases supported are:
 
-- Base62: digits, upper, and lower-case letters. No special characters
+- Base94: Base64 (Upper, Lower, Digits) with 30 extra special characters
+- Base64: Url-Safe version. Base64 but swaps the plus and slash by dash and underscore respectively.
+- Base62: digits, upper, and lower-case letters. No special characters. The default.
 - Base32: digits and upper case without ambiguous characters "1lI" or "oO0"
 - Base 2 through 36 (except 32): Ruby's `Integer#to_s(base)` is used
-- Base64: Uses the `Base64.urlsafe_encode64` such has 2 special characters.
-- Base63: It is not implemented.
 
-The Base32 may seem out of place, but is useful for alpha-numeric codes the users are required to type, such as redemption codes.
-All letter are folded to upper-case, and ambiguous characters are converted to the canonical ones.
+The Base32 may seem out of place, but is useful for alpha-numeric codes the users are required to type or speak,
+such as serial numbers or license codes.
+All letters are upper-case, and ambiguous characters are converted to the canonical ones.
 
-    MakeId.int_to_base(123456789, 32) #=> "3nqk8n"
-    MakeId.from_base("3nqk8n", 10)    #=> 123456789
-    MakeId.int_to_base(123456789, 32) #=> "3nqk8n"
+    MakeId.int_to_base(123456789, 32) #=> "3NQK8N"
+    MakeId.from_base("3NQK8N", 10)    #=> 123456789
+    MakeId.int_to_base(123456789, 32) #=> "3NQK8N"
     MakeId.verify_base32_id("...")    #=> corrected_id or nil if error
 
 ### Random Integer
@@ -120,7 +121,7 @@ You can also pass in options to return it as a different base, and with a check 
 
     MakeId.app_worker_id = 234
     MakeId.snowflake_id => 618905333721374720
-    MakeId.snowflake_id(worker_id: 12, base: 32, sequence_method: :random) #=> "2tmxk6ne81jd5"
+    MakeId.snowflake_id(worker_id: 12, base: 32, sequence_method: :random) #=> "2TMXK6NE81JD5"
 
 The `snowflake_uuid` method provides a time-based identifier, great for sorting just as sequential numbers, but unique enough to fit the bill.
 

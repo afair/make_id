@@ -9,6 +9,7 @@ RSpec.describe MakeId do
     it "converts bases" do
       id = MakeId.random_id
       id62 = MakeId.int_to_base(id)
+      p [id, id62, MakeId.base_to_int(id62)]
       expect(MakeId.base_to_int(id62)).to eq(id)
     end
   end

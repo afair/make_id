@@ -2,7 +2,6 @@
 
 require_relative "make_id/version"
 require "securerandom"
-require "base64"
 require "zlib"
 
 # MakeID generates record Identifiers other than sequential integers.
@@ -11,10 +10,27 @@ require "zlib"
 # Adopt   - Copy this file to your application with the above attribution to
 #           allow others to find fixes, documentation, and new features.
 module MakeId
-  # class Error < StandardError; end
+  class Error < StandardError; end
 
-  CHARS32 = "0123456789abcdefghjkmnpqrstvwxyz" # Avoiding ambiguous 0/o i/l/I
-  CHARS62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  # Base32 avoids ambiguous letters for 0/o/O and i/I/l/1. This is useful
+  # for human-interpreted codes for serial numbers, license keys, etc.
+  BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+  # Ruby's Integer.to_s(2..36) uses extended Hexadecimal: 0-9,a-z.
+  # Base62 includes upper-case letters as well, maintaining ASCII cardinality.
+  BASE62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+  # Base64 Does not use ASCII-collating (sort) character set
+  BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+
+  # Base94 extends Base64 with all printable ASCII special characters.
+  # Using Base of 90 won't use quotes, backslash
+  BASE94 = BASE64 + %q(!$%&()*,-.:;<=>?@[]^_{|}~#`'"\\)
+
+  # URL-Encoded Base64 swaps the + and / for - and _ respectively to avoid URL Encoding
+  URL_BASE64 = BASE64.tr("+/", "-_")
+
+  # TWitter Snowflake starts its epoch at this time.
   EPOCH_TWITTER = Time.utc(2006, 3, 21, 20, 50, 14)
 
   @@app_worker_id = ENV.fetch("APP_WORKER_ID", 0)
@@ -64,16 +80,9 @@ module MakeId
   # Base 64 uses URL-safe characters. Bases 19-32 and below use a special
   # character set that avoids visually ambiguous characters. Other bases
   # utilize the full alphanumeric characer set (digits, lower/upper letters).
-  def self.random(size = 16, base: 62)
-    raise "Base must be between 2 and 62, or 64, not #{base}" unless base < 63 || base == 64
-    if base == 62
-      SecureRandom.alphanumeric(size)
-    elsif base == 64
-      SecureRandom.urlsafe_base64(size)
-    else
-      alpha = (base <= 32) ? CHARS32 : CHARS62
-      (1..size).map { alpha[SecureRandom.rand(base - 1)] }.join
-    end
+  def self.random(size = 16, base: 62, chars: nil)
+    _, chars = base_characters(base, chars)
+    SecureRandom.alphanumeric(size, chars: chars.chars)
   end
 
   ##############################################################################
@@ -87,6 +96,12 @@ module MakeId
     id = int_to_base(id, base) unless base == 10
     id = append_check_digit(id, base) if check_digit
     id
+  end
+
+  def self.random_id_password(bytes: 8, base: 10, absolute: true, alpha: nil)
+    id = random_id(bytes: bytes)
+    pass = random_id(bytes: 16)
+    [int_to_base(id, base), encode_alphabet(pass, alpha || BASE94, seed: id)]
   end
 
   ##############################################################################
@@ -113,7 +128,7 @@ module MakeId
   # suitable for URL's or where you don't want to show a sequential number.
   # A check digit is added to the end to help prevent typos.
   def self.nano_id(size: 20, base: 62, check_digit: true)
-    # alpha = (base <= 32) ? CHARS32 : CHARS62
+    # alpha = (base <= 32) ? BASE32 : BASE62
     size -= 1 if check_digit
     id = random(size, base: base)
     check_digit ? append_check_digit(id, base) : id
@@ -148,20 +163,20 @@ module MakeId
   end
 
   ##############################################################################
-  # Event Id - A nano_id, but timestamped event identifier: YMDHMSUUrrrrc
+  # TEMPORAL ID's
   ##############################################################################
 
-  # Returns an event timestamp of the form YMDHMSUUrrrrc
+  # Event Id - A nano_id, but timestamped event identifier: YMDHMSUUrrrrc
   def self.event_id(size: 12, check_digit: false, time: nil)
     time ||= Time.new.utc
     usec = int_to_base((time.subsec.to_f * 62 * 62).to_i, 62)
     parts = [
-      CHARS62[time.year % @@epoch.year],
-      CHARS62[time.month],
-      CHARS62[time.day],
-      CHARS62[time.hour],
-      CHARS62[time.min],
-      CHARS62[time.sec],
+      BASE62[time.year % @@epoch.year],
+      BASE62[time.month],
+      BASE62[time.day],
+      BASE62[time.hour],
+      BASE62[time.min],
+      BASE62[time.sec],
       usec.rjust(2, "0") # 2-chars, 0..3843
     ]
     nano_size = size - 8 - (check_digit ? 1 : 0)
@@ -183,10 +198,10 @@ module MakeId
     end
 
     [
-      CHARS62[time.year % @@epoch.year],
-      CHARS62[time.month],
-      CHARS62[time.day], # "-",
-      CHARS62[time.hour].downcase,
+      BASE62[time.year % @@epoch.year],
+      BASE62[time.month],
+      BASE62[time.day], # "-",
+      BASE62[time.hour].downcase,
       int_to_base(seconds, 32).rjust(3, "0"), # 3 chars
       int_to_base((time.subsec.to_f * 32 * 32).to_i, 32), # 2 chars
       sequence.to_s(32).rjust(2, "0"), # 2 chars "-",
@@ -298,23 +313,9 @@ module MakeId
   # Ruby's int.to_s(base) only goes to 36. Base 32 is special as it does not
   # contain visually ambiguous characters (1, not i, I, l, L) and (0, not o or O)
   # Which is useful for serial numbers or codes the user has to read or type
-  def self.int_to_base(int, base = 62, check_digit: false)
-    int = int.to_i
-    if base == 10
-      id = int.to_s
-    elsif base == 64
-      id = Base64.urlsafe_encode64(int.to_s).delete("=")
-    elsif base == 32 || base > 36
-      alpha = (base <= 32) ? CHARS32 : CHARS62
-      id = ""
-      while int > (base - 1)
-        id = alpha[int % base] + id
-        int /= base
-      end
-      id = alpha[int] + id
-    else
-      id = int.to_s(base)
-    end
+  def self.int_to_base(int, base = 62, check_digit: false, chars: nil)
+    base, chars = base_characters(base, chars)
+    id = encode_alphabet(int, chars)
     check_digit ? append_check_digit(id, base) : id
   end
 
@@ -323,20 +324,56 @@ module MakeId
   # Parses a string as a base n number and returns its decimal integer value
   def self.base_to_int(string, base = 62, check_digit: false)
     # TODO check_digit
-    if base == 64
-      int = Base64.urlsafe_decode64(string.to_s + "==")
-    elsif base == 32 || base > 36
-      alpha = (base <= 32) ? CHARS32 : CHARS62
-      string = string.to_s
-      int = 0
-      string.each_char { |c| int = int * base + alpha.index(c) }
-    else
-      int = string.to_i(base)
-    end
-    int
+    _, chars = base_characters(base, chars)
+    decode_alphabet(string, chars)
   end
 
   singleton_class.alias_method :from_base, :base_to_int
+
+  def self.encode_alphabet(int, alpha = BASE62, seed: nil)
+    base = alpha.size
+    alpha = alpha.chars.shuffle(random: Random.new(seed)).join if seed
+    id = ""
+    while int > (base - 1)
+      id = alpha[int % base] + id
+      int /= base
+    end
+    alpha[int] + id
+  end
+
+  def self.decode_alphabet(string, alpha = BASE32, seed: nil, base: nil)
+    base ||= alpha.size
+    alpha = alpha.chars.shuffle(random: Random.new(seed)).join if seed
+    int = 0
+    string.each_char { |c| int = int * base + alpha.index(c) }
+    int
+  rescue
+    nil
+  end
+
+  # Returns the refined base and characters used for the base conversions
+  def self.base_characters(base, chars = nil, shuffle_seed: nil)
+    if chars
+      base ||= chars.size
+      chars = chars[0..(base - 1)]
+    elsif base > 94 || base < 2
+      raise Error.new("Base#{base} is not supported")
+    elsif base > 64
+      chars = BASE94[0..(base - 1)]
+    elsif base > 62
+      chars = URL_BASE64[0..(base - 1)]
+    elsif base == 32
+      chars = BASE32
+    else
+      chars = BASE62[0..(base - 1)]
+    end
+    if shuffle_seed
+      chars = chars.chars.shuffle(random: Random.new(shuffle_seed)).join
+    end
+    base = chars.size
+
+    [base, chars]
+  end
 
   ##############################################################################
   # Check Digit
