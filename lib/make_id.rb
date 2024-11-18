@@ -73,24 +73,11 @@ module MakeId
   end
 
   ##############################################################################
-  # Random Strings
-  ##############################################################################
-
-  # Returns a random alphanumeric string of the given base, default of 62.
-  # Base 64 uses URL-safe characters. Bases 19-32 and below use a special
-  # character set that avoids visually ambiguous characters. Other bases
-  # utilize the full alphanumeric characer set (digits, lower/upper letters).
-  def self.random(size = 16, base: 62, chars: nil)
-    _, chars = base_characters(base, chars)
-    SecureRandom.alphanumeric(size, chars: chars.chars)
-  end
-
-  ##############################################################################
-  # Integers
+  # Numeric Identifiers (of any suported base)
   ##############################################################################
 
   # Random Integer ID
-  def self.random_id(bytes: 8, base: 10, absolute: true, check_digit: false)
+  def self.id(bytes: 8, base: 10, absolute: true, check_digit: false)
     id = SecureRandom.random_number(2**(bytes * 8) - 2) + 1 # +1 to avoid zero
     id = id.abs if absolute
     id = int_to_base(id, base) unless base == 10
@@ -98,17 +85,26 @@ module MakeId
     id
   end
 
-  def self.random_id_password(bytes: 8, base: 10, absolute: true, alpha: nil)
-    id = random_id(bytes: bytes)
-    pass = random_id(bytes: 16)
+  def self.id_password(bytes: 8, base: 10, absolute: true, alpha: nil)
+    id = id(bytes: bytes)
+    pass = id(bytes: 16)
     [int_to_base(id, base), encode_alphabet(pass, alpha || BASE94, seed: id)]
+  end
+
+  # Generates a 8-byte "nano id", a string of random characters of the given alphabet,
+  # suitable for URL's or where you don't want to show a sequential number.
+  # A check digit can be added to the end to help prevent typos.
+  def self.nano_id(bytes: 8, base: 62, check_digit: true)
+    bytes -= 1 if check_digit
+    id = id(bytes: bytes, base: base)
+    check_digit ? append_check_digit(id, base) : id
   end
 
   ##############################################################################
   # UUID - Universally Unique Identifier
   ##############################################################################
 
-  # Returns a (securely) random generated UUID v4
+  # Returns a 16-byte securely-random generated UUID v4
   def self.uuid
     SecureRandom.uuid
   end
@@ -121,49 +117,40 @@ module MakeId
   end
 
   ##############################################################################
-  # Nano Id - Simple, secure URL-friendly unique string ID generator
+  # Strings Identifiers
   ##############################################################################
 
-  # Generates a "nano id", a string of random characters of the given alphabet,
-  # suitable for URL's or where you don't want to show a sequential number.
-  # A check digit is added to the end to help prevent typos.
-  def self.nano_id(size: 20, base: 62, check_digit: true)
-    # alpha = (base <= 32) ? BASE32 : BASE62
-    size -= 1 if check_digit
-    id = random(size, base: base)
-    check_digit ? append_check_digit(id, base) : id
+  # Returns a random alphanumeric string of the given base, default of 62.
+  # Base 64 uses URL-safe characters. Bases 19-32 and below use a special
+  # character set that avoids visually ambiguous characters. Other bases
+  # utilize the full alphanumeric characer set (digits, lower/upper letters).
+  def self.token(size = 16, base: 62, chars: nil)
+    _, chars = base_characters(base, chars)
+    SecureRandom.alphanumeric(size, chars: chars.chars)
+  end
+
+  # Returns a new, ramdonly-generated Base-32 code (no ambiguous characters).
+  # Use this for Two-Factor Authorization, and serial number codes to be
+  # input by users. Use verify_code() to "fix" user-input of codes.
+  def self.code(size = 8, group: 0, delimiter: "-")
+    id = token(size, base: 32)
+    id = id.chars.each_slice(group).map(&:join).join(delimiter) if group > 0
+    id
   end
 
   # Given a nano_id, replaces visually ambiguous characters and verifies the
   # check digit. Returns the corrected id or nil if the check digit is invalid.
-  def self.verify_base32_id(nanoid)
-    nanoid.gsub!(/[oO]/, "0")
-    nanoid.gsub!(/[lLiI]/, "1")
-    nanoid.downcase
-    valid_check_digit?(nanoid, base: 32)
-  end
-
-  # Manual Id is a code and/or identifier that is manually entered by a user.
-  # Examples of this would be a Two-Factor Authentication challenge, a code
-  # used for confirmation, redemption, or a short-term record lookup code
-  # (like an airline ticket/itenerary code)
-  # It uses a base-32 (non-ambiguous character set) by default,
-  def self.manual_id(size: 6, base: 32, check_digit: false)
-    base = 32 if base > 36 # For upcasing
-    nano_id(size: size, base: base, check_digit: check_digit).upcase
-  end
-
-  def self.fix_manual_id(id, base: 32, check_digit: false)
-    if base == 32
-      id = id.gsub(/[oO]/, "0")
-      id = id.gsub(/[lLiI]/, "1")
-    end
-    id = valid_check_digit?(id.downcase, base: 32) if check_digit
-    id.upcase
+  def self.verify_code(nanoid, check_digit: false)
+    nanoid = nanoid.gsub(/\W/, "")
+    nanoid = nanoid.gsub(/[oO]/, "0")
+    nanoid = nanoid.gsub(/[lLiI]/, "1")
+    nanoid = nanoid.upcase
+    return valid_check_digit?(nanoid, base: 32) if check_digit
+    nanoid
   end
 
   ##############################################################################
-  # TEMPORAL ID's
+  # TEMPORAL Identifiers
   ##############################################################################
 
   # Event Id - A nano_id, but timestamped event identifier: YMDHMSUUrrrrc
@@ -180,7 +167,7 @@ module MakeId
       usec.rjust(2, "0") # 2-chars, 0..3843
     ]
     nano_size = size - 8 - (check_digit ? 1 : 0)
-    parts << nano_id(size: nano_size, base: 62) if nano_size > 0
+    parts << token(nano_size, base: 62) if nano_size > 0
     id = check_digit ? append_check_digit(parts.join, 62) : parts.join
     id[0, size]
   end
@@ -206,7 +193,7 @@ module MakeId
       int_to_base((time.subsec.to_f * 32 * 32).to_i, 32), # 2 chars
       sequence.to_s(32).rjust(2, "0"), # 2 chars "-",
       (app_worker_id % 1024).to_s(32).rjust(2, "0"), # 2 chars
-      random(3, base: 32)
+      token(3, base: 32)
     ].join
   end
 
@@ -323,7 +310,7 @@ module MakeId
 
   # Parses a string as a base n number and returns its decimal integer value
   def self.base_to_int(string, base = 62, check_digit: false)
-    # TODO check_digit
+    # TODO: check_digit
     _, chars = base_characters(base, chars)
     decode_alphabet(string, chars)
   end
@@ -367,9 +354,7 @@ module MakeId
     else
       chars = BASE62[0..(base - 1)]
     end
-    if shuffle_seed
-      chars = chars.chars.shuffle(random: Random.new(shuffle_seed)).join
-    end
+    chars = chars.chars.shuffle(random: Random.new(shuffle_seed)).join if shuffle_seed
     base = chars.size
 
     [base, chars]
@@ -389,6 +374,7 @@ module MakeId
   # Uses a pre-defined check_proc if configured. See check_proc=().
   def self.compute_check_digit(id, base = 10)
     return @@check_proc.call(id, base) if @@check_proc.is_a?(Proc)
+
     int_to_base(Zlib.crc32(id.to_s) % base, base)
   end
 

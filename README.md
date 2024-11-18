@@ -61,8 +61,14 @@ MakeId can return a random (8-byte by default) integer. You can request it retur
 and with an optional check_digit.
 Usually, you would use the integer returned, and call `int_to_base` to format for a URL or code.
 
-    MakeId.random_id() #=> 15379918763975837985ZZ
-    MakeId.random_id(base: 62, check_digit: true) #=> "2984biEwRT1"
+    MakeId.id() #=> 15379918763975837985ZZ
+    MakeId.id(base: 62, check_digit: true) #=> "2984biEwRT1"
+
+Nano Id's are shorter unique strings generated from random characters, usually as a friendlier alternative
+to UUID's. These are 8-byte numeric identifiers in extended bases, such as 36 or 62.
+
+    MakeId.nano_id()         #=> "iZnLn96FVcjivEJA" (Base-62 be default)
+    MakeId.nano_id(base: 36) #=> "sf8kqb8ekn7k98rq"
 
 ### UUID
 
@@ -76,16 +82,28 @@ can be used to transform a long UUID into a possibly more palettable base repres
     MakeId.uuid_to_base(u, 62) #=> "fWJtuXEQJnkjxroWjkmei" (21 characters)
 
 Note that some databases support a UUID type which makes storing UUID's easier, and since they are stored as a binary
-field, consume less space.ZZ
+field, consume less space.
 
-### Nano Id
+### Tokens
 
-Nano Id's are shorter unique strings generated from random characters, usually as a friendlier alternative
-to UUID's. They also can be of any size, depending on the key range you require. Pay attention to the keyspace,
-ensuring you have enough characters to avoid predictable collisions in the future.
+Tokens are randomly-generated strings of the character set of the requested base.
+The default size is 16 characters of the Base-62 character set.
 
-    MakeId.nano_id(size: 16) #=> "iZnLn96FVcjivEJA"
-    MakeId.nano_id(size: 16, base: 32) #=> "sf8kqb8ekn7k98rq"
+    MakeId.token() #=> "Na4VX61PBFVZWL6Y"
+    MakeId.token(8, base:36) #=> "BK0ZTL9H"
+
+### Codes
+
+Codes are string tokens to send to users for input. They have no ambiguous characters to avoid confusion.
+This is useful for verifications such as two-factor authentication codes, or license numbers.
+This returns an 8-character string by default. Specify a group (size) and delimiter (default is a hyphen)
+to make long codes readable.
+
+    MakeId.code #=> "22E0D18F"
+    MakeId.code(20) #=> "Y41Q24AG7DYZYTAZWQZX"
+    MakeId.code(20, group: 4, delimiter: "-") #=> "9975-V5VM-KKSR-4PQ6-7F4G"
+
+### Temporal Identifiers
 
 A `request_id` is a nano_id that can be used to track requests and jobs. It is a 16-byte string, the same
 storage as a UUID, but with columnar values. The substring of 3 for 8 is a short (8 character) version that
@@ -96,9 +114,7 @@ can be used as well, is easier to read, sortable within a day, and unique enough
     id[3,8]                #=> "f1272t01"
     #-------------------------->Hsssuuqq
 
-### Snowflake Id
-
-Snowflakes were invented at Twitter to stamp an identifier for a tweet or direct message.
+Snowflake Id's were invented at Twitter to stamp an identifier for a tweet or direct message.
 It is an 8-byte integer intended to be time-sorted and unique across the fleet of servers saving messages.
 It is a bit-mapped integer consisting of these parts:
 
@@ -136,18 +152,6 @@ records or when you need a slowflake ID but have a UUID column to fill.
 
     MakeID.snowflake_datetime_uuid #=> "20240904-1418-5332-2000-3a38e61d5582"
     #------------------------>YYYYMMDD-hhmm-ssuu-uwww-rrrrrrrrrrrr
-
-## Experimental Id's
-
-The `event_id` is a string, sortable by creation time, with visible time seperator columns.
-It is of the format "YMDhmsuurrrr", using Base62, with an optional check_sum characer.
-It also used the application epoch described under `snowflake_id`. "uu" represents the fractional
-seconds that can be represented in Base62, and a 4-character random Base64 "nano_id".
-
-    MakeId.epoch = 2020
-    MakeId.event_id #=> "493KgpQGErTB"
-    #------------------->YMDhmsuurrrr ()
-    MakeId.event_id(check_digit: true) #=> "493Kkha6HZa2" (3 random chars + check digit)
 
 ## Development
 

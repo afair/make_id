@@ -3,11 +3,11 @@
 RSpec.describe MakeId do
   describe "random" do
     it "generates the id" do
-      expect(MakeId.random_id).to be > 0
+      expect(MakeId.id).to be > 0
     end
 
     it "converts bases" do
-      id = MakeId.random_id
+      id = MakeId.id
       id62 = MakeId.int_to_base(id)
       p [id, id62, MakeId.base_to_int(id62)]
       expect(MakeId.base_to_int(id62)).to eq(id)
@@ -48,15 +48,15 @@ RSpec.describe MakeId do
 
   describe "nano_id" do
     it "generates the nano_id" do
-      expect(MakeId.nano_id).to match(/\A[0-9A-Za-z]{20}\z/)
+      expect(MakeId.nano_id).to match(/\A[0-9A-Za-z]+\z/)
     end
 
-    it "manual_id" do
-      expect(MakeId.manual_id).to match(/\A[0-9A-Z]{6}\z/)
+    it "code" do
+      expect(MakeId.code).to match(/\A[0-9A-Z]+\z/)
     end
 
-    it "fix_manual_id" do
-      expect(MakeId.fix_manual_id("1liO0a")).to eq("11100A")
+    it "verify_code" do
+      expect(MakeId.verify_code("1liO0a")).to eq("11100A")
     end
 
     it "request_id" do
