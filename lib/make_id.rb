@@ -3,6 +3,7 @@
 require_relative "make_id/version"
 require "securerandom"
 require "zlib"
+require "digest"
 
 # MakeID generates record Identifiers other than sequential integers.
 # MakeId  - From the "make_id" gem found at https://github.com/afair/make_id
@@ -100,6 +101,21 @@ module MakeId
     check_digit ? append_check_digit(id, base) : id
   end
 
+  # Takes a string and returns an 8-byte integer for the string.
+  # This implementation uses the SHA256 hash of the string to generate the ID.
+  # You can also have random bits added to the ID to make it unique.
+  # This is not a unique ID, but a repeatable ID for the same string
+  # (unless random_bits is used), and can be used like a hashing value.
+  def self.string_id(string, random_bits: 0, base: 10, bytes: 8)
+    id = Digest::SHA256.hexdigest(string)[0, bytes * 2].to_i(16)
+    if random_bits > 0
+      id >> random_bits
+      id << random_bits
+      id |= SecureRandom.random_number(2**random_bits - 1)
+    end
+    (base == 10) ? id : int_to_base(id, base)
+  end
+
   ##############################################################################
   # UUID - Universally Unique Identifier
   ##############################################################################
@@ -195,6 +211,36 @@ module MakeId
       (app_worker_id % 1024).to_s(32).rjust(2, "0"), # 2 chars
       token(3, base: 32)
     ].join
+  end
+
+  # Returns an id using the current epoch time with floating precision and random bits.
+  # Be default, this returns an 8-byte integer in ascending order within precision.
+  # Format is approximately "SSSSSSSSSMMMRRR" (seconds, milliseconds, random).
+  # * precision (1..5) The number of milliseconds decimeal places to use. Default is 4.
+  # * random_bits (1..) The number of bits to use for the random number. Default is 18.
+  # * time - Time object to use for the token. Default is Time.now
+  # * base - The base to use for the id. Default is 10
+  # * chars - The character set to use for the base conversion. Default is BASE62
+  def self.time_id(base: 10, precision: 4, random_bits: 18, time: nil, chars: nil)
+    seconds = ((time || Time.now).to_f * (10**precision)).to_i
+    id = (seconds * (2**random_bits)) | SecureRandom.random_number(2**random_bits - 1)
+    (base == 10) ? id : int_to_base(id, base, chars: chars)
+  end
+
+  # Returns a string from the time with floating precision, and a random number appended.
+  # This calls time_id() and returns a token of the given size.
+  # If size is zero, the full token is returned. If size is greater than the token,
+  # the token is right-justified with zeros. If the token is larger than size, the
+  # right-most characters are returned.
+  def self.time_token(size: 0, base: 62, chars: nil, time: nil, precision: 3, random_bits: 8)
+    token = time_id(base: base, precision: precision, random_bits: random_bits, time: time, chars: chars)
+    if size == 0
+      token
+    elsif token.size < size
+      token.rjust(size, "0")
+    else
+      token[-size, size]
+    end
   end
 
   ##############################################################################
