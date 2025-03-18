@@ -416,6 +416,12 @@ module MakeId
     id.to_s + compute_check_digit(id, base)
   end
 
+  # Removes and validates the check digit. Retuns nil if the check digit is invalid.
+  def self.remove_check_digit(id, base = 10)
+    id, cd = id.to_s[0..-2], id.to_s[-1]
+    valid_check_digit?(id + cd, base) ? id : nil
+  end
+
   # Returns a character computed using the CRC32 algorithm
   # Uses a pre-defined check_proc if configured. See check_proc=().
   def self.compute_check_digit(id, base = 10)
